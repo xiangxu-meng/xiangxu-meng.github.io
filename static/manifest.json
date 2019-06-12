@@ -1,0 +1,25 @@
+{
+  "name": "Pwa实战",
+  "short_name": "Pwa",
+  "display": "standalone",
+  "start_url": "/?from=homescreen",
+  "icons": [
+    {
+      "src": "images/touch/homescreen48.png",
+      "sizes": "48x48",
+      "type": "image/png"
+    },
+    {
+      "src": "images/touch/homescreen96.png",
+      "sizes": "96x96",
+      "type": "image/png"
+    },
+    {
+      "src": "images/touch/homescreen144.png",
+      "sizes": "144x144",
+      "type": "image/png"
+    }
+  ],
+  "background_color": "#3e4eb8",
+  "theme_color": "#2f3ba2"
+}
