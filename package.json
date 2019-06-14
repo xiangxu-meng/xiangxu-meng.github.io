@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "bfj": "^6.1.1",
+    "http-server": "^0.11.1",
     "vue": "^2.5.2",
     "vue-router": "^3.0.1"
   },

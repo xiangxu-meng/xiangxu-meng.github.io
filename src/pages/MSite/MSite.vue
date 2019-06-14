@@ -6,7 +6,7 @@
         <i class="iconfont icon-search1"></i>
       </span>
       <span class="header_title">
-        <span class="header_title_text ellipsis">昌平区北七家洪福齐天</span>
+        <span class="header_title_text ellipsis">test</span>
        </span>
        <span class="header_login">
          <span class="header_login_text">登录|注册</span>
@@ -14,7 +14,6 @@
     </header>
     <!-- 首页导航 -->
     <nav class="msite_nav">
-
     </nav>
     <!-- 首页附近商家 -->
     <div class="msite_shop_list">
