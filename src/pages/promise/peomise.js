@@ -68,37 +68,37 @@ function Promise(callback){
 Promise.prototype.then = function(){
 
 }
-//完善我们的resolve和rejected:^
-//Promise最重要的方法是then方法，then接收两个参数promise.then(onFulfilled, onRejected)
-// onFulfilled,onRejected 参数可选，如果这两个参数不是函数，则必须被忽略
-// onFulfilled 特性:
-// 当onFulfilled是个函数时,Promise执行结束后其必须被调用，其中第一个参数为Promise的终值,也就是resolve传过来的值
-// 在Promise执行完之前其不能被调用
-// 调用次数不能超过一次
+完善我们的resolve和rejected:^
+Promise最重要的方法是then方法，then接收两个参数promise.then(onFulfilled, onRejected)
+onFulfilled,onRejected 参数可选，如果这两个参数不是函数，则必须被忽略
+onFulfilled 特性:
+当onFulfilled是个函数时,Promise执行结束后其必须被调用，其中第一个参数为Promise的终值,也就是resolve传过来的值
+在Promise执行完之前其不能被调用
+调用次数不能超过一次
 
-// onRejected 特性:
-// onRejected,Promise执行拒绝后其必须被调用，其中第一个参数为Promise的拒绝的原因,也就是reject传过来的值
-// 在Promise被拒绝之前其不能被调用
-// 调用次数不能超过一次
-// 调用时机
-// onFulfilled 和 onRejected 只有在执行环境堆栈仅包含平台代码时才可被调用（平台代码指引擎、环境以及 promise 的实施代码）
+onRejected 特性:
+onRejected,Promise执行拒绝后其必须被调用，其中第一个参数为Promise的拒绝的原因,也就是reject传过来的值
+在Promise被拒绝之前其不能被调用
+调用次数不能超过一次
+调用时机
+onFulfilled 和 onRejected 只有在执行环境堆栈仅包含平台代码时才可被调用（平台代码指引擎、环境以及 promise 的实施代码）
 
-// 调用要求
-// onFulfilled 和 onRejected 必须被作为函数调用（即没有 this 值，在 严格模式（strict） 中，函数 this 的值为 undefined ；在非严格模式中其为全局对象。）
+调用要求
+onFulfilled 和 onRejected 必须被作为函数调用（即没有 this 值，在 严格模式（strict） 中，函数 this 的值为 undefined ；在非严格模式中其为全局对象。）
 
-// 多次调用
-// then 方法可以被同一个 promise 调用多次
+多次调用
+then 方法可以被同一个 promise 调用多次
 
-// 当 promise 成功执行时，所有 onFulfilled 需按照其注册顺序依次回调
-// 当 promise 被拒绝执行时，所有的 onRejected 需按照其注册顺序依次回调
+当 promise 成功执行时，所有 onFulfilled 需按照其注册顺序依次回调
+当 promise 被拒绝执行时，所有的 onRejected 需按照其注册顺序依次回调
 
-// then 返回
-// then方法必须返回一个Promise对象 
-// Promise2 = Promise1.then(onFulfilled,onRejected)
-// 如果 onFulfilled 或者 onRejected 返回一个值x,则运行下面的Promise的解决过程：[[Resolve]](promise2, x)
-// 如果 onFulfilled 或者 onRejected 抛出一个异常 e , 则Promise2必须拒绝执行，并返回拒因e
-// 如果 onFulfilled 不是函数且 promise1 成功执行， promise2 必须成功执行并返回相同的值
-// 如果 onRejected 不是函数且 promise1 拒绝执行， promise2 必须拒绝执行并返回相同的据因
+then 返回
+then方法必须返回一个Promise对象 
+Promise2 = Promise1.then(onFulfilled,onRejected)
+如果 onFulfilled 或者 onRejected 返回一个值x,则运行下面的Promise的解决过程：[[Resolve]](promise2, x)
+如果 onFulfilled 或者 onRejected 抛出一个异常 e , 则Promise2必须拒绝执行，并返回拒因e
+如果 onFulfilled 不是函数且 promise1 成功执行， promise2 必须成功执行并返回相同的值
+如果 onRejected 不是函数且 promise1 拒绝执行， promise2 必须拒绝执行并返回相同的据因
 
 Promise.prototype.then = function(onResolved,onRejected){
   var self = this

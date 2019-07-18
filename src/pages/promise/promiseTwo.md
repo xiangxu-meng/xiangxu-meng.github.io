@@ -83,9 +83,9 @@ function resolve(value){
   if(_self.status == 'pending'){
     _self.status = 'fulfilled',
     _self.data = value
-  _self.onresolveCallback.foreach(item = >{
-    item(value)
-  })
+    _self.onresolveCallback.foreach(item = >{
+      item(value)
+    })
   }
 }
  function reject(err) {
@@ -164,7 +164,374 @@ Promise.prototype.then(onResolved,onRejected){
     // 只能等到Promise的状态确定后，才能确定如何处理。
     // 所以我们需要把我们的**两种情况**的处理逻辑做为callback放入promise1(此处即this/self)的回调数组里
     // 逻辑本身跟第一个if块内的几乎一致，此处不做过多解释
+    self.onResolvedCallback.push(function(reason){
+      try{
+        var x = onRejected(self.data){
+          if(x instanceof Promise){
+            x.then(resolve,reject)
+          }
+        }
+      }catch(e){
+        reject(e)
+      }
+    })
+    self.onRejectedCallback.push(function(reason){
+      try{
+        var x = onRejected(self.data)
+        if(x instanceof Promise){
+          x.then(resolve,reject)
+        }
+      }catch(e){
+        reject(e)
+      }
+    })
+    })
+  }
+
+
+  //实现fullfilled的方法
+  if(self.status == 'fullfilled'){
+    //如果promise1（此处为this,self）的状态已经确定并且是resolved，我们调用onResolved
+    //因为考虑到可能throw 所以我们将其包裹在try/catch模块中
+    return promise2 = new Promise (function(resolve,reject){
+      try{
+        var x = onResolve(self.data)
+        if(x instanceof Promise){
+          x.then(resolve,reject)
+        }
+        resolve(x)
+      }catch(e){
+        reject(e)
+      }
+    })
+  }
+  //实现reject的方法
+  if(self.data == 'reject'){
+    return promise2 = new Promise (function(resolve,reject){
+      try{
+        var x = onReject(self.data)
+        if(x instanceof Promise){
+          x.then(resolve,reject)
+        }catch(e){
+          reject(e)
+        }
+      }
     })
   }
 }
+
+// 为了下文方便，我们顺便实现一个catch方法
+Promise.prototype.catch = function(onRejected) {
+  return this.then(null, onRejected)
+}
 ```
+至此，我们基本实现了Promise标准中所涉及到的内容，但还有几个问题：
+1.不同的Promise实现之间需要无缝的可交互，即Q的Promise，ES6的Promise，和我们实现的Promise之间以及其它的Promise实现，应该并且是有必要无缝相互调用的，比如：
+```
+// 此处用MyPromise来代表我们实现的Promise
+new MyPromise(function(resolve, reject) { // 我们实现的Promise
+  setTimeout(function() {
+    resolve(42)
+  }, 2000)
+}).then(function() {
+  return new Promise.reject(2) // ES6的Promise
+}).then(function() {
+  return Q.all([ // Q的Promise
+    new MyPromise(resolve=>resolve(8)), // 我们实现的Promise
+    new Promise.resolve(9), // ES6的Promise
+    Q.resolve(9) // Q的Promise
+  ])
+})
+```
+我们前面实现的代码并没有处理这样的逻辑，我们只判断了onResolved/onRejected的返回值是否为我们实现的Promise的实例，并没有做任何其它的判断，所以上面这样的代码目前是没有办法在我们的Promise里正确运行的。
+2.下面这样的代码目前也是没办法处理的：
+```
+new Promise(resolve=>resolve(8))
+  .then()
+  .then()
+  .then(function foo(value) {
+    alert(value)
+  })
+
+```
+正确的行为应该是alert出8，而如果拿我们的Promise，运行上述代码，将会alert出undefined。这种行为称为穿透，即8这个值会穿透两个then(说Promise更为准确)到达最后一个then里的foo函数里，成为它的实参，最终将会alert出8。
+
+下面我们首先处理简单的情况，值的穿透：
+
+Promise值的穿透
+```
+new Promise(resolve=>resolve(8))
+  .then()
+  .catch()
+  .then(function(value) {
+    alert(value)
+  })
+
+```
+跟下面这段代码的行为是一样的
+```
+new Promise(resolve=>resolve(8))
+  .then(function(value){
+    return value
+  })
+  .catch(function(reason){
+    throw reason
+  })
+  .then(function(value) {
+    alert(value)
+  })
+  ```
+  所以如果想要把then的实参留空且让值可以穿透到后面，意味着then的两个参数的默认值分别为function(value) {return value}，function(reason) {throw reason}。
+所以我们只需要把then里判断onResolved和onRejected的部分改成如下即可：
+
+```
+onResolved = typeof onResolved === 'function' ? onResolved : function(value) {return value}
+onRejected = typeof onRejected === 'function' ? onRejected : function(reason) {throw reason}
+```
+于是Promise神奇的值的穿透也没有那么黑魔法，只不过是then默认参数就是把值往后传或者抛
+
+<b>不同Promise的交互</b>
+
+关于不同Promise间的交互，其实标准里是有说明的，其中详细指定了如何通过then的实参返回的值来决定promise2的状态，我们只需要按照标准把标准的内容转成代码即可。
+
+这里简单解释一下标准：
+
+即我们要把onResolved/onRejected的返回值，x，当成一个可能是Promise的对象，也即标准里所说的thenable，并以最保险的方式调用x上的then方法，如果大家都按照标准实现，那么不同的Promise之间就可以交互了。而标准为了保险起见，即使x返回了一个带有then属性但并不遵循Promise标准的对象（比如说这个x把它then里的两个参数都调用了，同步或者异步调用（PS，原则上then的两个参数需要异步调用，下文会讲到），或者是出错后又调用了它们，或者then根本不是一个函数），也能尽可能正确处理。
+
+关于为何需要不同的Promise实现能够相互交互，我想原因应该是显然的，Promise并不是JS一早就有的标准，不同第三方的实现之间是并不相互知晓的，如果你使用的某一个库中封装了一个Promise实现，想象一下如果它不能跟你自己使用的Promise实现交互的场景。。。
+
+建议各位对照着标准阅读以下代码，因为标准对此说明的非常详细，所以你应该能够在任意一个Promise实现中找到类似的代码：
+```
+/*
+resolvePromise函数即为根据x的值来决定promise2的状态的函数
+也即标准中的[Promise Resolution Procedure](https://promisesaplus.com/#point-47)
+x为`promise2 = promise1.then(onResolved, onRejected)`里`onResolved/onRejected`的返回值
+`resolve`和`reject`实际上是`promise2`的`executor`的两个实参，因为很难挂在其它的地方，所以一并传进来。
+相信各位一定可以对照标准把标准转换成代码，这里就只标出代码在标准中对应的位置，只在必要的地方做一些解释
+*/
+function resolvePromise(promise2, x, resolve, reject) {
+  var then
+  var thenCalledOrThrow = false
+
+  if (promise2 === x) { // 对应标准2.3.1节
+    return reject(new TypeError('Chaining cycle detected for promise!'))
+  }
+
+  if (x instanceof Promise) { // 对应标准2.3.2节
+    // 如果x的状态还没有确定，那么它是有可能被一个thenable决定最终状态和值的
+    // 所以这里需要做一下处理，而不能一概的以为它会被一个“正常”的值resolve
+    if (x.status === 'pending') {
+      x.then(function(value) {
+        resolvePromise(promise2, value, resolve, reject)
+      }, reject)
+    } else { // 但如果这个Promise的状态已经确定了，那么它肯定有一个“正常”的值，而不是一个thenable，所以这里直接取它的状态
+      x.then(resolve, reject)
+    }
+    return
+  }
+
+  if ((x !== null) && ((typeof x === 'object') || (typeof x === 'function'))) { // 2.3.3
+    try {
+
+      // 2.3.3.1 因为x.then有可能是一个getter，这种情况下多次读取就有可能产生副作用
+      // 即要判断它的类型，又要调用它，这就是两次读取
+      then = x.then 
+      if (typeof then === 'function') { // 2.3.3.3
+        then.call(x, function rs(y) { // 2.3.3.3.1
+          if (thenCalledOrThrow) return // 2.3.3.3.3 即这三处谁选执行就以谁的结果为准
+          thenCalledOrThrow = true
+          return resolvePromise(promise2, y, resolve, reject) // 2.3.3.3.1
+        }, function rj(r) { // 2.3.3.3.2
+          if (thenCalledOrThrow) return // 2.3.3.3.3 即这三处谁选执行就以谁的结果为准
+          thenCalledOrThrow = true
+          return reject(r)
+        })
+      } else { // 2.3.3.4
+        resolve(x)
+      }
+    } catch (e) { // 2.3.3.2
+      if (thenCalledOrThrow) return // 2.3.3.3.3 即这三处谁选执行就以谁的结果为准
+      thenCalledOrThrow = true
+      return reject(e)
+    }
+  } else { // 2.3.4
+    resolve(x)
+  }
+}
+
+```
+然后我们使用这个函数的调用替换then里几处判断x是否为Promise对象的位置即可，见下方完整代码。
+最后，我们刚刚说到，原则上，promise.then(onResolved, onRejected)里的这两相函数需要异步调用，关于这一点，标准里也有说明：
+
+In practice, this requirement ensures that onFulfilled and onRejected execute asynchronously, after the event loop turn in which then is called, and with a fresh stack.
+
+所以我们需要对我们的代码做一点变动，即在四个地方加上setTimeout(fn, 0)，这点会在完整的代码中注释，请各位自行发现。
+
+事实上，即使你不参照标准，最终你在自测试时也会发现如果then的参数不以异步的方式调用，有些情况下Promise会不按预期的方式行为，通过不断的自测，最终你必然会让then的参数异步执行，让executor函数立即执行。本人在一开始实现Promise时就没有参照标准，而是自己凭经验测试，最终发现的这个问题。
+
+```
+try {
+  module.exports = Promise
+} catch (e) {}
+
+function Promise(executor) {
+  var self = this
+
+  self.status = 'pending'
+  self.onResolvedCallback = []
+  self.onRejectedCallback = []
+
+  function resolve(value) {
+    if (value instanceof Promise) {
+      return value.then(resolve, reject)
+    }
+    setTimeout(function() { // 异步执行所有的回调函数
+      if (self.status === 'pending') {
+        self.status = 'resolved'
+        self.data = value
+        for (var i = 0; i < self.onResolvedCallback.length; i++) {
+          self.onResolvedCallback[i](value)
+        }
+      }
+    })
+  }
+
+  function reject(reason) {
+    setTimeout(function() { // 异步执行所有的回调函数
+      if (self.status === 'pending') {
+        self.status = 'rejected'
+        self.data = reason
+        for (var i = 0; i < self.onRejectedCallback.length; i++) {
+          self.onRejectedCallback[i](reason)
+        }
+      }
+    })
+  }
+
+  try {
+    executor(resolve, reject)
+  } catch (reason) {
+    reject(reason)
+  }
+}
+
+function resolvePromise(promise2, x, resolve, reject) {
+  var then
+  var thenCalledOrThrow = false
+
+  if (promise2 === x) {
+    return reject(new TypeError('Chaining cycle detected for promise!'))
+  }
+
+  if (x instanceof Promise) {
+    if (x.status === 'pending') { //because x could resolved by a Promise Object
+      x.then(function(v) {
+        resolvePromise(promise2, v, resolve, reject)
+      }, reject)
+    } else { //but if it is resolved, it will never resolved by a Promise Object but a static value;
+      x.then(resolve, reject)
+    }
+    return
+  }
+
+  if ((x !== null) && ((typeof x === 'object') || (typeof x === 'function'))) {
+    try {
+      then = x.then //because x.then could be a getter
+      if (typeof then === 'function') {
+        then.call(x, function rs(y) {
+          if (thenCalledOrThrow) return
+          thenCalledOrThrow = true
+          return resolvePromise(promise2, y, resolve, reject)
+        }, function rj(r) {
+          if (thenCalledOrThrow) return
+          thenCalledOrThrow = true
+          return reject(r)
+        })
+      } else {
+        resolve(x)
+      }
+    } catch (e) {
+      if (thenCalledOrThrow) return
+      thenCalledOrThrow = true
+      return reject(e)
+    }
+  } else {
+    resolve(x)
+  }
+}
+
+Promise.prototype.then = function(onResolved, onRejected) {
+  var self = this
+  var promise2
+  onResolved = typeof onResolved === 'function' ? onResolved : function(v) {
+    return v
+  }
+  onRejected = typeof onRejected === 'function' ? onRejected : function(r) {
+    throw r
+  }
+
+  if (self.status === 'resolved') {
+    return promise2 = new Promise(function(resolve, reject) {
+      setTimeout(function() { // 异步执行onResolved
+        try {
+          var x = onResolved(self.data)
+          resolvePromise(promise2, x, resolve, reject)
+        } catch (reason) {
+          reject(reason)
+        }
+      })
+    })
+  }
+
+  if (self.status === 'rejected') {
+    return promise2 = new Promise(function(resolve, reject) {
+      setTimeout(function() { // 异步执行onRejected
+        try {
+          var x = onRejected(self.data)
+          resolvePromise(promise2, x, resolve, reject)
+        } catch (reason) {
+          reject(reason)
+        }
+      })
+    })
+  }
+
+  if (self.status === 'pending') {
+    // 这里之所以没有异步执行，是因为这些函数必然会被resolve或reject调用，而resolve或reject函数里的内容已是异步执行，构造函数里的定义
+    return promise2 = new Promise(function(resolve, reject) {
+      self.onResolvedCallback.push(function(value) {
+        try {
+          var x = onResolved(value)
+          resolvePromise(promise2, x, resolve, reject)
+        } catch (r) {
+          reject(r)
+        }
+      })
+
+      self.onRejectedCallback.push(function(reason) {
+          try {
+            var x = onRejected(reason)
+            resolvePromise(promise2, x, resolve, reject)
+          } catch (r) {
+            reject(r)
+          }
+        })
+    })
+  }
+}
+
+Promise.prototype.catch = function(onRejected) {
+  return this.then(null, onRejected)
+}
+
+Promise.deferred = Promise.defer = function() {
+  var dfd = {}
+  dfd.promise = new Promise(function(resolve, reject) {
+    dfd.resolve = resolve
+    dfd.reject = reject
+  })
+  return dfd
+}
+```
+
+

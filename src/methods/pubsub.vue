@@ -58,7 +58,6 @@ export default {
 
       //取消订阅
       unsubscrible:function(type,callback){
-        debugger;
         if(!this._observe[type] || !this._observe[type].length) return
         let subscribes = this._observe[type]
         subscribes.some((item , index , arr)=>{

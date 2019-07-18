@@ -100,20 +100,24 @@ class Promise {
    * @param {*失败} onRejected 
    */
 
-   then(onFulfilled,onRejected){
-     let promise ;
-
+  Promise.prototype.then = function(onFulfilled,onRejected){
+     let promise2 ;
+      var self = this
     // pending状态下将传入then的函数加入promise对应的回调队列
     // 等待promise状态改变后执行
 
     if(this.status == STATUS.PENDING){
+      // 如果当前的Promise还处于pending状态，我们并不能确定调用onResolved还是onRejected，
+      // 只能等到Promise的状态确定后，才能确实如何处理。
+      // 所以我们需要把我们的**两种情况**的处理逻辑做为callback放入promise1(此处即this/self)的回调数组里
+      // 逻辑本身跟第一个if块内的几乎一致，此处不做过多解释
       promise = new Promise((resolve,reject)=>{
         this.onFulfilledList.push(()=>{
           //传入的then的参数不是函数则忽略
           if(!(onFulfilled instanceof Function)){
             resolve(this.rejectData)
           }else{
-
+            
           }
         })
       })
